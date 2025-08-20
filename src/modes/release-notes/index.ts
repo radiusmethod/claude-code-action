@@ -1,72 +1,174 @@
 import * as core from "@actions/core";
-import type { Mode, ModeContext, ModeOptions, ModeResult } from "../types";
-import { isPushEvent } from "../../github/context";
-import { generateDefaultPrompt } from "../../create-prompt"; // Adjust if needed
 import { mkdir, writeFile } from "fs/promises";
-import type { Commit } from "@octokit/webhooks-types"; // For commit types
-import type * as node from "node";
+import type { Mode, ModeOptions, ModeResult } from "../types";
+import { isPushEvent } from "../../github/context";
+import type { PreparedContext } from "../../create-prompt/types";
+import type { Commit } from "@octokit/webhooks-types";
 
 export const releaseNotesMode: Mode = {
-  name: "release-notes" as ModeName,
+  name: "release-notes",
   description: "Generate release notes on push events",
 
   shouldTrigger(context) {
     if (!isPushEvent(context)) return false;
-    const targetBranch = (context.inputs as any).target_branch || "main";
-    return context.payload.ref === `refs/heads/${targetBranch}`;
+    const targetBranch = context.inputs.baseBranch || "main";
+    // Type guard to ensure we have a push event payload
+    if (context.eventName === "push" && "ref" in context.payload) {
+      return context.payload.ref === `refs/heads/${targetBranch}`;
+    }
+    return false;
   },
 
-  prepareContext(context, data?): ModeContext {
-    // Implement based on needs; return a ModeContext object
-    const commits = context.payload.commits?.map((c: Commit) => `${c.id.slice(0,7)}: ${c.message}`).join('\n') || "No commits";
-    return { ...data, commitHistory: commits } as CustomModeContext; // Ensure this matches ModeContext type
+  prepareContext(context, data?) {
+    // Release notes mode doesn't use comment tracking or PR/issue management
+    return {
+      mode: "release-notes" as const,
+      githubContext: context,
+      baseBranch: data?.baseBranch || "main",
+      claudeBranch: undefined,
+    };
   },
 
   getAllowedTools() {
-    return ["Read", "Grep", "Glob"]; // Customize as needed
+    // Return empty array - tools are configured via action inputs
+    return [];
   },
 
   getDisallowedTools() {
-    return ["WebSearch"]; // Example
+    // Return empty array - tools are configured via action inputs
+    return [];
   },
 
   shouldCreateTrackingComment() {
     return false; // Like agent mode
   },
 
-  generatePrompt(context, githubData, useCommitSigning) {
-    const basePrompt = generateDefaultPrompt(context, githubData, useCommitSigning);
-    return `${basePrompt}\n\nGenerate release notes from commits: ${context.commitHistory}`;
+  generatePrompt(context: PreparedContext): string {
+    // Check for override prompt first
+    if (context.overridePrompt) {
+      return context.overridePrompt;
+    }
+
+    // Build release notes specific prompt
+    let promptContent = `You are Claude, an AI assistant designed to help with GitHub automation tasks.\n\n`;
+    
+    promptContent += `Repository: ${context.repository}\n`;
+    promptContent += `Event: Push to branch\n\n`;
+    
+    // This will be handled in the prepare method where we have access to the actual push payload
+    
+    // Use direct prompt if provided, otherwise use custom instructions
+    if (context.directPrompt) {
+      promptContent += `\nTask Instructions:\n${context.directPrompt}\n`;
+    } else if (context.customInstructions) {
+      promptContent += `\nTask Instructions:\n${context.customInstructions}\n`;
+    } else {
+      promptContent += `\nGenerate release notes for the recent changes pushed to the repository.\n`;
+    }
+    
+    return promptContent;
   },
 
-  // Update prepare method to be async and implement full logic (replace the placeholder)
   async prepare({ context }: ModeOptions): Promise<ModeResult> {
-    await mkdir(`${process.env.RUNNER_TEMP || "/tmp"}/claude-prompts`, { recursive: true });
-    const promptContent = context.inputs.overridePrompt || context.inputs.directPrompt || `Generate release notes for repository: ${context.repository.owner}/${context.repository.repo}`;
-    await writeFile(`${process.env.RUNNER_TEMP || "/tmp"}/claude-prompts/claude-prompt.txt`, promptContent);
+    // Release notes mode handles push events only
+    if (!isPushEvent(context)) {
+      throw new Error("Release notes mode requires push event context");
+    }
 
-    const baseTools = ["Edit", "Read", "Grep", "Glob"];
+    // We don't need GitHub data for push event release notes
+
+    // For push events in release-notes mode, we need to create a compatible context
+    // since createPrompt expects ParsedGitHubContext but we have AutomationContext
+    // We'll bypass createPrompt and create our own prompt handling
+    
+    await mkdir(`${process.env.RUNNER_TEMP || "/tmp"}/claude-prompts`, {
+      recursive: true,
+    });
+
+    // Generate the prompt directly for this mode
+    let promptContent = `You are Claude, an AI assistant designed to help with GitHub automation tasks.\n\n`;
+    promptContent += `Repository: ${context.repository.full_name}\n`;
+    promptContent += `Event: Push to branch\n\n`;
+    
+    // Add push event details
+    if (context.eventName === "push" && "commits" in context.payload && context.payload.commits) {
+      const commits = context.payload.commits
+        .map((c: Commit) => `${c.id.slice(0,7)}: ${c.message}`)
+        .join('\n');
+      promptContent += `Recent Commits:\n${commits}\n\n`;
+    }
+    
+    // Use custom instructions if provided
+    if (context.inputs.customInstructions) {
+      promptContent += `\nTask Instructions:\n${context.inputs.customInstructions}\n`;
+    } else if (context.inputs.directPrompt) {
+      promptContent += `\nTask Instructions:\n${context.inputs.directPrompt}\n`;
+    } else if (context.inputs.overridePrompt) {
+      promptContent = context.inputs.overridePrompt;
+    } else {
+      promptContent += `\nGenerate release notes for the recent changes pushed to the repository.\n`;
+    }
+    
+    // Write the prompt file
+    await writeFile(
+      `${process.env.RUNNER_TEMP || "/tmp"}/claude-prompts/claude-prompt.txt`,
+      promptContent
+    );
+    
+    // Set up allowed/disallowed tools
+    const baseTools = [
+      "Edit",
+      "MultiEdit", 
+      "Glob",
+      "Grep",
+      "LS",
+      "Read",
+      "Write",
+    ];
+    
     const allowedTools = [...baseTools, ...context.inputs.allowedTools];
-    const disallowedTools = ["WebSearch", ...context.inputs.disallowedTools];
+    const disallowedTools = [
+      "WebSearch",
+      "WebFetch",
+      ...context.inputs.disallowedTools,
+    ];
+    
     core.exportVariable("ALLOWED_TOOLS", allowedTools.join(","));
     core.exportVariable("DISALLOWED_TOOLS", disallowedTools.join(","));
 
-    const mcpConfig = { mcpServers: {} };
-    // Add additional MCP config if provided
+    // Get MCP configuration (minimal for release notes)
+    const mcpConfig: any = {
+      mcpServers: {},
+    };
+    
+    // Add user-provided additional MCP config if any
     const additionalMcpConfig = process.env.MCP_CONFIG || "";
     if (additionalMcpConfig.trim()) {
-      Object.assign(mcpConfig, JSON.parse(additionalMcpConfig));
+      try {
+        const additional = JSON.parse(additionalMcpConfig);
+        if (additional && typeof additional === "object") {
+          Object.assign(mcpConfig, additional);
+        }
+      } catch (error) {
+        core.warning(`Failed to parse additional MCP config: ${error}`);
+      }
     }
 
-    return { 
-      success: true, 
-      mcpConfig,
-      branchInfo: { baseBranch: "", claudeBranch: "" },
-      commentId: undefined
+    core.setOutput("mcp_config", JSON.stringify(mcpConfig));
+
+    return {
+      commentId: undefined,
+      branchInfo: {
+        baseBranch: "main",
+        currentBranch: "main",
+        claudeBranch: undefined,
+      },
+      mcpConfig: JSON.stringify(mcpConfig),
     };
   },
 
-  getSystemPrompt(context: ModeContext): string | undefined {
-    return "You are a release notes generator. Summarize changes categorically.";
+  getSystemPrompt(): string | undefined {
+    // Return undefined - system prompt can be configured via action inputs
+    return undefined;
   }
 };
