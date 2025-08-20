@@ -8,6 +8,7 @@ import {
   isPullRequestEvent,
   isPullRequestReviewEvent,
   isPullRequestReviewCommentEvent,
+  isPushEvent,
 } from "../context";
 import type { ParsedGitHubContext } from "../context";
 
@@ -130,6 +131,20 @@ export function checkContainsTrigger(context: ParsedGitHubContext): boolean {
       console.log(`Comment contains exact trigger phrase '${triggerPhrase}'`);
       return true;
     }
+  }
+
+  if (isPushEvent(context)) {
+    const pushTriggerPhrase = context.inputs.push_trigger_phrase || "";
+    if (!pushTriggerPhrase) return true;
+    const commits = context.payload.commits || [];
+    const regex = new RegExp(`(^|\\s)${escapeRegExp(pushTriggerPhrase)}([\\s.,!?;:]|$)`);
+    for (const commit of commits) {
+      if (regex.test(commit.message)) {
+        console.log(`Push commit message contains trigger phrase '${pushTriggerPhrase}'`);
+        return true;
+      }
+    }
+    return false;
   }
 
   console.log(`No trigger was met for ${triggerPhrase}`);

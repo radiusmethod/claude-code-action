@@ -336,6 +336,15 @@ export function prepareContext(
       };
       break;
 
+    case "push":
+      const pushDetails = context.payload.commits?.map(c => `Commit ${c.id}: ${c.message}\n`).join('\n') || "No commits";
+      eventData = {
+        eventName: "push",
+        isPR: false,
+        pushDetails,
+      };
+      break;
+
     default:
       throw new Error(`Unsupported event type: ${eventName}`);
   }
@@ -396,6 +405,12 @@ export function getEventTypeAndContext(envVars: PreparedContext): {
         triggerContext: eventData.eventAction
           ? `pull request ${eventData.eventAction}`
           : `pull request event`,
+      };
+
+    case "push":
+      return {
+        eventType: "PUSH",
+        triggerContext: `Push to branch ${envVars.pushDetails.split('\n')[0].split(':')[1].trim()}\nCommits:\n${envVars.pushDetails.split('\n').slice(1).join('')}`
       };
 
     default:

@@ -6,6 +6,7 @@ import type {
   PullRequestEvent,
   PullRequestReviewEvent,
   PullRequestReviewCommentEvent,
+  PushEvent,
 } from "@octokit/webhooks-types";
 // Custom types for GitHub Actions events that aren't webhooks
 export type WorkflowDispatchEvent = {
@@ -206,6 +207,13 @@ export function parseGitHubContext(): GitHubContext {
         payload: context.payload as unknown as ScheduleEvent,
       };
     }
+    case "push": {
+      return {
+        ...commonFields,
+        eventName: "push",
+        payload: context.payload as unknown as PushEvent,
+      };
+    }
     default:
       throw new Error(`Unsupported event type: ${context.eventName}`);
   }
@@ -288,4 +296,8 @@ export function isAutomationContext(
   return AUTOMATION_EVENT_NAMES.includes(
     context.eventName as AutomationEventName,
   );
+}
+
+export function isPushEvent(ctx: GitHubContext): boolean {
+  return ctx.eventName === "push";
 }

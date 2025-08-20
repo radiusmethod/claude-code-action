@@ -1,0 +1,9 @@
+{
+  "ref": "refs/heads/main",
+  "commits": [
+    {
+      "id": "abc123",
+      "message": "Test commit for release notes"
+    }
+  ]
+}

@@ -30,7 +30,7 @@ inputs:
 
   # Mode configuration
   mode:
-    description: "Execution mode for the action. Valid modes: 'tag' (default - triggered by mentions/assignments), 'agent' (for automation with no trigger checking), 'experimental-review' (experimental mode for code reviews with inline comments and suggestions)"
+    description: 'Execution mode: tag (default), agent, experimental-review, release-notes'
     required: false
     default: "tag"
 
@@ -118,6 +118,14 @@ inputs:
     description: "Restrict network access to these domains only (newline-separated). If not set, no restrictions are applied. Provider domains are auto-detected."
     required: false
     default: ""
+  push_trigger_phrase:
+    description: 'Phrase in commit messages to trigger on push (empty = always trigger)'
+    required: false
+    default: ''
+  target_branch:
+    description: 'Branch for release notes generation (e.g., main)'
+    required: false
+    default: 'main'
 
 outputs:
   execution_file:

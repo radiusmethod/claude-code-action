@@ -479,6 +479,18 @@ describe("checkContainsTrigger", () => {
       });
     });
   });
+
+  describe("push trigger", () => {
+    it("triggers if push_trigger_phrase is empty", () => {
+      const context = { eventName: "push", inputs: { push_trigger_phrase: "" } };
+      expect(checkContainsTrigger(context)).toBe(true);
+    });
+
+    it("triggers if phrase in commit message", () => {
+      const context = { eventName: "push", inputs: { push_trigger_phrase: "@claude" }, payload: { commits: [{ message: "Fix bug @claude" }] } };
+      expect(checkContainsTrigger(context)).toBe(true);
+    });
+  });
 });
 
 describe("escapeRegExp", () => {

@@ -14,6 +14,11 @@ A general-purpose [Claude Code](https://claude.ai/code) action for GitHub PRs an
 - 📋 **Progress Tracking**: Visual progress indicators with checkboxes that dynamically update as Claude completes tasks
 - 🏃 **Runs on Your Infrastructure**: The action executes entirely on your own GitHub runner (Anthropic API calls go to your chosen provider)
 
+## Custom Extensions
+
+- **Push Event Support**: Added handling for push events to trigger actions like release notes generation.
+- **Release Notes Mode**: New mode that generates release notes on pushes to main. Configure in workflows with mode: release-notes.
+
 ## ⚠️ **BREAKING CHANGES COMING IN v1.0** ⚠️
 
 **We're planning a major update that will significantly change how this action works.** The new version will:

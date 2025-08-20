@@ -14,11 +14,12 @@ import type { Mode, ModeName } from "./types";
 import { tagMode } from "./tag";
 import { agentMode } from "./agent";
 import { reviewMode } from "./review";
+import { releaseNotesMode } from "./release-notes";
 import type { GitHubContext } from "../github/context";
-import { isAutomationContext } from "../github/context";
+import { isAutomationContext, isPushEvent } from "../github/context";
 
 export const DEFAULT_MODE = "tag" as const;
-export const VALID_MODES = ["tag", "agent", "experimental-review"] as const;
+export const VALID_MODES = ["tag", "agent", "experimental-review", "release-notes"] as const;
 
 /**
  * All available modes.
@@ -28,6 +29,7 @@ const modes = {
   tag: tagMode,
   agent: agentMode,
   "experimental-review": reviewMode,
+  "release-notes": releaseNotesMode,
 } as const satisfies Record<ModeName, Mode>;
 
 /**
@@ -50,6 +52,12 @@ export function getMode(name: ModeName, context: GitHubContext): Mode {
   if (name === "tag" && isAutomationContext(context)) {
     throw new Error(
       `Tag mode cannot handle ${context.eventName} events. Use 'agent' mode for automation events.`,
+    );
+  }
+
+  if (name === "release-notes" && !isPushEvent(context)) {
+    throw new Error(
+      `Release-notes mode can only handle push events.`
     );
   }
 
